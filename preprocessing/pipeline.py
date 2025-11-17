@@ -1,6 +1,6 @@
 from typing import Dict, Any, Tuple
-from src.preprocessing.transforms import PreProcessor, DataAugmentation, ModelSpecificPreprocessor
-from src.data.config import PreProcessConfig
+from preprocessing.transforms import PreProcessor, DataAugmentation, ModelSpecificPreprocessor
+from data.config import PreProcessConfig
 
 # ============ COMPOSITION DES TRANSFORMATIONS ============
 

@@ -4,7 +4,7 @@ Model training script.
 import torch
 import torch.nn as nn
 from tqdm import tqdm
-from src.model.callbacks import EarlyStopping
+from model.callbacks import EarlyStopping
 
 __all__ = [
     "Trainer"

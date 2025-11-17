@@ -1,7 +1,7 @@
 import torch
 import torchvision.transforms as T
 from typing import Dict, Any, Tuple
-from src.data.config import PreProcessConfig
+from data.config import PreProcessConfig
 
 
 

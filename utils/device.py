@@ -2,6 +2,17 @@
 Device selection (GPU, CPU...)
 """
 
+import torch
+from torch.amp import GradScaler
+import psutil
+
+# Optionnel : accélération AMD sous Windows
+try:
+    import torch_directml
+    HAS_DIRECTML = True
+except ImportError:
+    HAS_DIRECTML = False
+
 __all__ = [
     "get_best_device"
 ]

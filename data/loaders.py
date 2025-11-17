@@ -11,7 +11,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader, random_split
 from datasets import load_dataset
 import numpy as np
-from src.data.datasets import LocalImageDataset, HuggingFaceImageDataset
+from data.datasets import LocalImageDataset, HuggingFaceImageDataset
 
 __all__ = [
     "BaseImageDatasetLoader",
