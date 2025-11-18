@@ -48,6 +48,8 @@ class BaseImageDatasetLoader(ABC):
         self.transforms = transforms
         self.split_ratios = split_ratios
         self.seed = seed
+        self._labels = None
+        self._dataset = None
 
         if split_ratios is not None:
             if not (2 <= len(split_ratios) <= 3):
@@ -133,6 +135,12 @@ class BaseImageDatasetLoader(ABC):
             pin_memory=torch.cuda.is_available()
         )
 
+    def get_labels(self):
+        if self._labels is None:
+            self._labels = self.load_data().get_labels()
+
+        return self._labels
+
 
 class LocalImageDatasetLoader(BaseImageDatasetLoader):
     """Loader pour datasets d'images locaux"""
@@ -149,11 +157,13 @@ class LocalImageDatasetLoader(BaseImageDatasetLoader):
 
     def load_data(self) -> LocalImageDataset:
         """Charge le dataset local"""
-        return LocalImageDataset(
-            data_dir=self.data_dir,
-            transforms=self.transforms,
-            extensions=self.extensions
-        )
+        if super()._dataset is None:
+            super()._dataset = LocalImageDataset(
+                data_dir=self.data_dir,
+                transforms=self.transforms,
+                extensions=self.extensions
+            )
+        return super()._dataset
 
 
 class HuggingFaceImageDatasetLoader(BaseImageDatasetLoader):
@@ -177,15 +187,17 @@ class HuggingFaceImageDatasetLoader(BaseImageDatasetLoader):
 
     def load_data(self) -> Dataset:
         """Charge le dataset Hugging Face"""
-        hf_dataset = load_dataset(
-            self.dataset_name,
-            split=self.split,
-            cache_dir=str(self.cache_dir) if self.cache_dir else None
-        )
+        if super()._dataset is None:
+            hf_dataset = load_dataset(
+                self.dataset_name,
+                split=self.split,
+                cache_dir=str(self.cache_dir) if self.cache_dir else None
+            )
 
-        return HuggingFaceImageDataset(
-            hf_dataset=hf_dataset,
-            transforms=self.transforms,
-            image_column=self.image_column,
-            label_column=self.label_column
-        )
+            super()._dataset = HuggingFaceImageDataset(
+                hf_dataset=hf_dataset,
+                transforms=self.transforms,
+                image_column=self.image_column,
+                label_column=self.label_column
+            )
+        return super()._dataset
