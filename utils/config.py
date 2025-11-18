@@ -36,7 +36,7 @@ class PreProcessConfig:
 
         # Créer/naviguer à travers tous les niveaux sauf le dernier
         for k in keys[:-1]:
-            if not hasattr(current, k):
+            if not hasattr(current, k) or getattr(current, k) is None:
                 setattr(current, k, PreProcessConfig({}))
             current = getattr(current, k)
 
