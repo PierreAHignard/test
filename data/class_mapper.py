@@ -21,7 +21,7 @@ class ClassMapping:
         start = max(self.mapping.values(), default=-1) + 1
         self._counter = count(start)
 
-    def __getitem__(self, keys: str | pd.Series[str] | pd.Series[int]):
+    def __getitem__(self, keys: str | pd.Series):
         if isinstance(keys, pd.Series):
             return keys.map(self._get_one_item)
         else:
