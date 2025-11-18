@@ -3,6 +3,7 @@ Model training script.
 """
 import torch
 import torch.nn as nn
+from tensorflow.core.config.flags import config
 from tqdm import tqdm
 from model.callbacks import EarlyStopping
 
@@ -105,8 +106,14 @@ class Trainer:
             # Sauvegarde du meilleur modèle
             if val_loss < self.best_val_loss:
                 self.best_val_loss = val_loss
-                torch.save(self.model.state_dict(), self.config["output_dir"] / "model" / "model.")
-                print("  ✓ Modèle sauvegardé")
+                checkpoint = {
+                    'model_state_dict': self.model.state_dict(),
+                    'optimizer_state_dict': self.optimizer.state_dict(),
+                    'epoch': epoch,
+                    'loss': val_loss
+                }
+                torch.save(checkpoint, self.config.working_directory / 'checkpoint.tar')
+                print("  ✓ Checkpoint sauvegardé")
 
             # Early stopping
             if self.early_stopping(val_loss):

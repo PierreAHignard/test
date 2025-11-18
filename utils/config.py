@@ -11,6 +11,7 @@ class PreProcessConfig:
 
     def __init__(
         self,
+        CONFIG_DICT,
         image_size: tuple[int, int] = (224, 224),
         normalize_mean: tuple = (0.485, 0.456, 0.406),
         normalize_std: tuple = (0.229, 0.224, 0.225),
@@ -21,6 +22,8 @@ class PreProcessConfig:
         self.normalize_mean = normalize_mean
         self.normalize_std = normalize_std
         self.num_classes = num_classes
+
+        self.working_directory = CONFIG_DICT["output_dir"]
 
         self.logger = logging.getLoggerClass()
 
