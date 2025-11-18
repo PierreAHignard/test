@@ -32,8 +32,13 @@ class PreProcessConfig:
 
     def _set_nested_attr(self, key, value):
         keys = key.split('.')
+        current = self
+
+        # Créer/naviguer à travers tous les niveaux sauf le dernier
         for k in keys[:-1]:
-            if not hasattr(self, k):
-                setattr(self, k, PreProcessConfig({}))
-            current = getattr(self, k)
-        setattr(self, keys[-1], value)
+            if not hasattr(current, k):
+                setattr(current, k, PreProcessConfig({}))
+            current = getattr(current, k)
+
+        # Définir la valeur au dernier niveau
+        setattr(current, keys[-1], value)

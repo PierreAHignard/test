@@ -3,7 +3,6 @@ Model training script.
 """
 import torch
 import torch.nn as nn
-from tensorflow.core.config.flags import config
 from tqdm import tqdm
 from model.callbacks import EarlyStopping
 
