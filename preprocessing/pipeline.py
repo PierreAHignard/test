@@ -1,6 +1,6 @@
 from typing import Dict, Any, Tuple
 from preprocessing.transforms import PreProcessor, DataAugmentation, ModelSpecificPreprocessor
-from utils.config import PreProcessConfig
+from utils.config import Config
 
 # ============ COMPOSITION DES TRANSFORMATIONS ============
 
@@ -10,7 +10,7 @@ class TransformPipeline:
 
     def __init__(
         self,
-        config: PreProcessConfig,
+        config: Config,
         model_name: str = 'resnet50',
         is_train: bool = True
     ):

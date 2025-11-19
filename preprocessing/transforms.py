@@ -1,7 +1,7 @@
 import torch
 import torchvision.transforms as T
 from typing import Dict, Any, Tuple
-from utils.config import PreProcessConfig
+from utils.config import Config
 
 
 
@@ -10,7 +10,7 @@ from utils.config import PreProcessConfig
 class PreProcessor:
     """Étape 1: Standardisation des données"""
 
-    def __init__(self, config: PreProcessConfig):
+    def __init__(self, config: Config):
         self.config = config
 
     def __call__(self, image: Any, label: str) -> Any:
@@ -33,6 +33,12 @@ class PreProcessor:
 
         # Convertir en tensor float32
         image = T.ToTensor()(image)
+
+        # Dans le PreProcessor, avant de traiter les données
+        print("------------Testing for issues with mapping-----------")
+        print(f"Wants to map label : '{label}'")
+        print("Class mapping:", self.config.class_mapping.mapping)
+        print("Class size:", self.config.class_mapping.size)
 
         # Convert labels using the mapping
         label = self.config.class_mapping[label]
