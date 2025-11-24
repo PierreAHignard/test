@@ -23,13 +23,13 @@ class TransformPipeline:
         self.model_processor = ModelSpecificPreprocessor(config, model_name)
 
     def __call__(self, image: Any, label: str) -> Tuple[str, Any]:
-        # Étape 1
+        # Global Preprocessing
         image, label = self.pre_processor(image, label)
 
-        # Étape 2
+        # Data Augmentation
         image, label = self.augmentor(image, label)
 
-        # Étape 3
+        # Model-Specific Preprocessing
         image, label = self.model_processor(image, label)
 
         return image, label

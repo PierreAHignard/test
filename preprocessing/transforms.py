@@ -63,9 +63,9 @@ class DataAugmentation:
                 T.RandomHorizontalFlip(p=0.5),
                 T.RandomVerticalFlip(p=0.3),
                 T.RandomRotation(degrees=15),
-                T.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2),
-                T.RandomAffine(degrees=0, translate=(0.1, 0.1)),
-                T.GaussianBlur(kernel_size=3, sigma=(0.1, 2.0))
+                T.ColorJitter(brightness=0.05, contrast=0.05, saturation=0.05),
+                T.RandomAffine(degrees=0, translate=(0.05, 0.05)),
+                T.GaussianBlur(kernel_size=3, sigma=(0.1, 0.5))
             ])
         else:
             self.transforms = T.Compose([])  # Pas d'augmentation en eval
