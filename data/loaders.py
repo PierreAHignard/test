@@ -12,6 +12,7 @@ from torch.utils.data import Dataset, DataLoader, random_split
 from datasets import load_dataset
 import numpy as np
 from data.datasets import LocalImageDataset, HuggingFaceImageDataset
+from utils.config import Config
 
 __all__ = [
     "BaseImageDatasetLoader",
@@ -172,10 +173,12 @@ class HuggingFaceImageDatasetLoader(BaseImageDatasetLoader):
     def __init__(
         self,
         dataset_name: str,
+        config: Config,
         split: str = "train",
         cache_dir: Optional[Path] = None,
         image_column: str = 'image',
         label_column: str = 'label',
+        streaming: bool = False,
         **kwargs
     ):
         super().__init__(**kwargs)
@@ -184,6 +187,8 @@ class HuggingFaceImageDatasetLoader(BaseImageDatasetLoader):
         self.cache_dir = cache_dir
         self.image_column = image_column
         self.label_column = label_column
+        self.config = config
+        self.streaming = streaming
 
     def load_data(self) -> Dataset:
         """Charge le dataset Hugging Face"""
@@ -191,7 +196,9 @@ class HuggingFaceImageDatasetLoader(BaseImageDatasetLoader):
             hf_dataset = load_dataset(
                 self.dataset_name,
                 split=self.split,
-                cache_dir=str(self.cache_dir) if self.cache_dir else None
+                cache_dir=str(self.cache_dir) if self.cache_dir else None,
+                token=self.config.HF_token,
+                streaming=self.streaming
             )
 
             self._dataset = HuggingFaceImageDataset(

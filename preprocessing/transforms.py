@@ -2,8 +2,7 @@ import torch
 import torchvision.transforms as T
 from typing import Dict, Any, Tuple
 from utils.config import Config
-
-
+from PIL import Image
 
 # ============ ÉTAPE 1: PRE_PREPROCESS ============
 
@@ -17,7 +16,6 @@ class PreProcessor:
         # Traiter l'image
         # Convertir en PIL si nécessaire
         if isinstance(image, str):
-            from PIL import Image
             image = Image.open(image)
 
         # Convertir en RGB (supprimer RGBA si présent)
@@ -34,14 +32,19 @@ class PreProcessor:
         # Convertir en tensor float32
         image = T.ToTensor()(image)
 
-        # Dans le PreProcessor, avant de traiter les données
-        print("------------Testing for issues with mapping-----------")
-        print(f"Wants to map label : '{label}'")
-        print("Class mapping:", self.config.class_mapping.mapping)
-        print("Class size:", self.config.class_mapping.size)
+        ## AVANT le mapping
+        #print("------------Testing for issues with mapping-----------")
+        #print(f"Wants to map label : '{label}'")
+        #print("Class mapping before:", self.config.class_mapping.mapping)
+        #print("Class size before:", self.config.class_mapping.size)
 
-        # Convert labels using the mapping
+        # Le mapping se crée ici automatiquement
         label = self.config.class_mapping[label]
+
+        ## APRÈS le mapping
+        #print("Class mapping after:", self.config.class_mapping.mapping)
+        #print("Class size after:", self.config.class_mapping.size)
+        #print(f"Label '{label}' mapped to ID: {label}")
 
         return image, label
 
@@ -51,7 +54,7 @@ class PreProcessor:
 class DataAugmentation:
     """Étape 2: Augmentation des données (seulement train)"""
 
-    def __init__(self, config: PreProcessConfig, is_train: bool = True):
+    def __init__(self, config: Config, is_train: bool = True):
         self.config = config
         self.is_train = is_train
 
@@ -87,7 +90,7 @@ class DataAugmentation:
 class ModelSpecificPreprocessor:
     """Étape 3: Normalisation spécifique au modèle"""
 
-    def __init__(self, config: PreProcessConfig, model_name: str = 'resnet50'):
+    def __init__(self, config: Config, model_name: str = 'resnet50'):
         self.config = config
         self.model_name = model_name
 

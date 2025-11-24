@@ -105,7 +105,7 @@ class HuggingFaceImageDataset(Dataset):
         item = self.dataset[idx]
 
         image = item[self.image_column]
-        label = item[self.label_column]
+        label = item[self.label_column][0] #TODO : [0] is a temporary fix for multi-label
 
         # Convertir en PIL Image si nécessaire
         if not isinstance(image, Image.Image):
@@ -118,4 +118,5 @@ class HuggingFaceImageDataset(Dataset):
 
     def get_labels(self) -> Set[str]:
         """Donne le Set des labels uniques présents dans le dataset"""
-        return set(item[self.label_column] for item in self.dataset)
+        return set(item[self.label_column][0] for item in self.dataset) #TODO : [0] is a temporary fix for multi-label
+
