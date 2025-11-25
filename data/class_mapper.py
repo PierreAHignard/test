@@ -1,4 +1,4 @@
-from typing import Dict, List, Union
+from typing import Dict, List
 from itertools import count
 import pandas as pd
 from logging import Logger
