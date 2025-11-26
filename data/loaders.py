@@ -26,6 +26,7 @@ class BaseImageDatasetLoader(ABC):
 
     def __init__(
         self,
+        config: Config,
         batch_size: int = 32,
         num_workers: int = 0,
         shuffle: bool = True,
@@ -35,6 +36,7 @@ class BaseImageDatasetLoader(ABC):
     ):
         """
         Args:
+            config: Config
             batch_size: Taille des batches
             num_workers: Nombre de workers pour le DataLoader
             shuffle: Mélanger les données
@@ -51,6 +53,7 @@ class BaseImageDatasetLoader(ABC):
         self.seed = seed
         self._labels = None
         self._dataset = None
+        self.config = config
 
         if split_ratios is not None:
             if not (2 <= len(split_ratios) <= 3):
@@ -117,7 +120,9 @@ class BaseImageDatasetLoader(ABC):
                     batch_size=self.batch_size,
                     num_workers=self.num_workers,
                     shuffle=shuffle,
-                    pin_memory=torch.cuda.is_available()
+                    pin_memory=self.config.dataloader.pin_memory,
+                    prefetch_factor=self.config.dataloader.prefetch_factor,
+                    persistent_workers=self.config.dataloader.persistent_workers
                 ))
             return tuple(loaders)
 
@@ -154,7 +159,7 @@ class LocalImageDatasetLoader(BaseImageDatasetLoader):
         extensions: Tuple[str, ...] = ('.jpg', '.jpeg', '.png', '.bmp', '.tiff'),
         **kwargs
     ):
-        super().__init__(**kwargs)
+        super().__init__(config, **kwargs)
         self.data_dir = Path(data_dir)
         self.extensions = extensions
         self.config = config
@@ -185,7 +190,7 @@ class HuggingFaceImageDatasetLoader(BaseImageDatasetLoader):
         streaming: bool = False,
         **kwargs
     ):
-        super().__init__(**kwargs)
+        super().__init__(config, **kwargs)
         self.dataset_name = dataset_name
         self.split = split
         self.cache_dir = cache_dir

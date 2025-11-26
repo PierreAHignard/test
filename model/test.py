@@ -202,7 +202,7 @@ class Tester:
 
         filename = f'confusion_matrix{"_normalized" if normalize else ""}.png'
         plt.savefig(self.run_dir / filename, dpi=300, bbox_inches='tight')
-        plt.close()
+        plt.show()
         print(f"Saved: {filename}")
 
     def plot_per_class_metrics(self, figsize: Tuple[int, int] = (14, 6)):
@@ -233,7 +233,7 @@ class Tester:
 
         plt.tight_layout()
         plt.savefig(self.run_dir / 'per_class_metrics.png', dpi=300, bbox_inches='tight')
-        plt.close()
+        plt.show()
         print("Saved: per_class_metrics.png")
 
     def plot_roc_curves(self, figsize: Tuple[int, int] = (10, 8)):
@@ -271,7 +271,7 @@ class Tester:
 
         plt.tight_layout()
         plt.savefig(self.run_dir / 'roc_curves.png', dpi=300, bbox_inches='tight')
-        plt.close()
+        plt.show()
         print("Saved: roc_curves.png")
 
     def plot_top_k_accuracy(self, max_k: int = 10):
