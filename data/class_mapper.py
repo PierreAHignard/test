@@ -43,10 +43,10 @@ class ClassMapping:
             raise ValueError(f"Value '{key}' is not included in (str, int)")
 
         if key not in self._mapping:
-            self._mapping[key] = next(self._counter)
-            self.size += 1
-
-            if not (_allow_new or self._allow_new_class_outside_preload):
+            if _allow_new or self._allow_new_class_outside_preload:
+                self._mapping[key] = next(self._counter)
+                self.size += 1
+            else:
                 raise Exception(f"Class {key} setting outside of preload")
 
             # TODO logging
