@@ -301,7 +301,7 @@ class Tester:
 
         plt.tight_layout()
         plt.savefig(self.run_dir / 'top_k_accuracy.png', dpi=300, bbox_inches='tight')
-        plt.close()
+        plt.show()
         print("Saved: top_k_accuracy.png")
 
     def plot_misclassification_analysis(self, top_n: int = 10):
@@ -354,7 +354,7 @@ class Tester:
                 dpi=300,
                 bbox_inches='tight'
             )
-            plt.close()
+            plt.show()
             print("Saved: misclassification_analysis.png")
 
     def generate_classification_report(self):

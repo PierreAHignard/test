@@ -45,16 +45,11 @@ class DataAugmentation:
         self.is_train = is_train
 
         if is_train:
-            self.transforms = T.Compose([
-                T.RandomHorizontalFlip(p=0.5),
-                T.RandomVerticalFlip(p=0.3),
-                T.RandomRotation(degrees=15),
-                T.ColorJitter(brightness=0.05, contrast=0.05, saturation=0.05),
-                T.RandomAffine(degrees=0, translate=(0.05, 0.05)),
-                T.GaussianBlur(kernel_size=3, sigma=(0.1, 0.5))
-            ])
+            transforms = self.config.transforms
         else:
-            self.transforms = T.Compose([])  # Pas d'augmentation en eval
+            transforms = [] # Pas d'augmentation en eval
+
+        self.transforms = T.Compose(transforms)
 
     def __call__(self, image: Any) -> Tuple[str, Any]:
         if self.is_train:

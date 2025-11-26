@@ -19,12 +19,14 @@ class Config:
         normalize_std: tuple = (0.229, 0.224, 0.225),
         class_mapping: Dict[str, int] = None,
         allow_new_class_outside_preload: bool = True,
-        device: str = 'cuda' if torch.cuda.is_available() else 'cpu'
+        device: str = 'cuda' if torch.cuda.is_available() else 'cpu',
+        transforms = None
     ):
         self.image_size = image_size
         self.normalize_mean = normalize_mean
         self.normalize_std = normalize_std
         self.device = device
+        self.transforms = transforms or []
 
         for key, value in config_dict.items():
             self._set_nested_attr(key, value)

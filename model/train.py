@@ -35,12 +35,14 @@ class Trainer:
         )
 
         self.best_val_loss = float('inf')
-        self.history = {"train_loss": [], "val_loss": [], "val_acc": []}
+        self.history = {"train_loss": [], "val_loss": [], "train_acc": [], "val_acc": []}
 
     def train_epoch(self):
         """Une époque d'entraînement"""
         self.model.train()
         total_loss = 0
+        correct = 0
+        total = 0
 
         for images, labels in tqdm(self.train_loader, desc="Training"):
             images, labels = images.to(self.device), labels.to(self.device)
@@ -56,9 +58,17 @@ class Trainer:
 
             total_loss += loss.item()
 
+            _, predicted = torch.max(outputs.data, 1)
+            total += labels.size(0)
+            correct += (predicted == labels).sum().item()
+
         avg_loss = total_loss / len(self.train_loader)
+        train_acc = 100 * correct / total
+
         self.history["train_loss"].append(avg_loss)
-        return avg_loss
+        self.history["train_acc"].append(train_acc)
+
+        return avg_loss, train_acc
 
     def validate(self):
         """Validation après chaque époque"""
@@ -92,14 +102,14 @@ class Trainer:
     def fit(self):
         """Boucle d'entraînement complète"""
         for epoch in range(self.config.fit.epochs):
-            train_loss = self.train_epoch()
+            train_loss, train_acc = self.train_epoch()
             val_loss, val_acc = self.validate()
 
             # Mise à jour du learning rate
             self.scheduler.step()
 
             print(f"Epoch {epoch+1}/{self.config.fit.epochs}")
-            print(f"  Train Loss: {train_loss:.4f}")
+            print(f"  Train Loss: {train_loss:.4f} | Train Acc: {train_acc:.2f}%")
             print(f"  Val Loss: {val_loss:.4f} | Val Acc: {val_acc:.2f}%")
 
             # Sauvegarde du meilleur modèle
@@ -120,3 +130,5 @@ class Trainer:
                 break
 
         return self.history
+
+
