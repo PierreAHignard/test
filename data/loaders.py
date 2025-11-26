@@ -11,7 +11,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader, random_split
 from datasets import load_dataset
 import numpy as np
-from data.datasets import LocalImageDataset, HuggingFaceImageDataset
+from data.datasets import LocalImageDataset, HuggingFaceImageDataset, CustomDataset
 from utils.config import Config
 
 __all__ = [
@@ -59,13 +59,13 @@ class BaseImageDatasetLoader(ABC):
                 raise ValueError(f"Les ratios doivent sommer à 1.0, actuellement: {sum(split_ratios)}")
 
     @abstractmethod
-    def load_data(self) -> Dataset:
+    def load_data(self) -> CustomDataset:
         """Charge et retourne le dataset"""
         pass
 
     def split_dataset(
         self,
-        dataset: Dataset
+        dataset: CustomDataset
     ) -> Union[Dataset, Tuple[Dataset, ...]]:
         """
         Split le dataset selon les ratios spécifiés
@@ -90,7 +90,7 @@ class BaseImageDatasetLoader(ABC):
 
     def get_dataloader(
         self,
-        dataset: Optional[Dataset] = None,
+        dataset: Optional[CustomDataset] = None,
         shuffle_override: Optional[bool] = None
     ) -> Union[DataLoader, Tuple[DataLoader, ...]]:
         """
@@ -136,9 +136,10 @@ class BaseImageDatasetLoader(ABC):
             pin_memory=torch.cuda.is_available()
         )
 
-    def get_labels(self):
+    @property
+    def labels(self):
         if self._labels is None:
-            self._labels = self.load_data().get_labels()
+            self._labels = self.load_data().labels
 
         return self._labels
 
@@ -149,18 +150,21 @@ class LocalImageDatasetLoader(BaseImageDatasetLoader):
     def __init__(
         self,
         data_dir: Path,
+        config: Config,
         extensions: Tuple[str, ...] = ('.jpg', '.jpeg', '.png', '.bmp', '.tiff'),
         **kwargs
     ):
         super().__init__(**kwargs)
         self.data_dir = Path(data_dir)
         self.extensions = extensions
+        self.config = config
 
     def load_data(self) -> LocalImageDataset:
         """Charge le dataset local"""
         if self._dataset is None:
             self._dataset = LocalImageDataset(
                 data_dir=self.data_dir,
+                config=self.config,
                 transforms=self.transforms,
                 extensions=self.extensions
             )
@@ -203,6 +207,7 @@ class HuggingFaceImageDatasetLoader(BaseImageDatasetLoader):
 
             self._dataset = HuggingFaceImageDataset(
                 hf_dataset=hf_dataset,
+                config=self.config,
                 transforms=self.transforms,
                 image_column=self.image_column,
                 label_column=self.label_column
