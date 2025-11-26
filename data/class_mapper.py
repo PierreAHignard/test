@@ -46,8 +46,8 @@ class ClassMapping:
             self._mapping[key] = next(self._counter)
             self.size += 1
 
-            if not _allow_new:
-                raise Exception("Class setting outside of preload")
+            if not (_allow_new or self._allow_new_class_outside_preload):
+                raise Exception(f"Class {key} setting outside of preload")
 
             # TODO logging
             # if self.logger:
