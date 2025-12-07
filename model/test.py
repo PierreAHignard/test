@@ -183,10 +183,12 @@ class Tester:
             title = 'Confusion Matrix'
             fmt = 'd'
 
+        n = len(self.class_names)
+
         plt.figure(figsize=figsize)
         sns.heatmap(
             cm,
-            annot=True,
+            annot= n<10 if normalize else n<15, # Normalised takes a bit more space
             fmt=fmt,
             cmap='Blues',
             xticklabels=self.class_names,
