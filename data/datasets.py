@@ -89,7 +89,7 @@ class LocalImageDataset(CustomDataset):
 class HuggingFaceImageDataset(CustomDataset):
     """
     Wrapper pour dataset HuggingFace avec support single et multi-label.
-    Retourne l'image brute + métadonnées (label, bbox)
+    Version optimisée pour éviter les accès séquentiels lents.
     """
 
     def __init__(
@@ -102,7 +102,6 @@ class HuggingFaceImageDataset(CustomDataset):
         bbox_column: Optional[str] = None,
         multi_label: bool = False
     ):
-        self.dataset = hf_dataset
         self.config = config
         self.transforms = transforms
         self.image_column = image_column
@@ -111,28 +110,48 @@ class HuggingFaceImageDataset(CustomDataset):
         self.multi_label = multi_label
 
         super().__init__()
+
+        # Convertir le dataset en format optimisé dès le départ
+        print("Préparation du dataset pour accès rapide...")
+        self.dataset = self._prepare_dataset(hf_dataset)
         self._build_index()
+
+    def _prepare_dataset(self, hf_dataset):
+        """Convertit le dataset HF en format optimisé pour accès rapide"""
+        # Option 1: Convertir en liste (charge tout en mémoire)
+        # Plus rapide mais consomme plus de RAM
+        if len(hf_dataset) < 50000:  # Seuil arbitraire
+            print("  → Chargement en mémoire...")
+            return list(hf_dataset)
+
+        # Option 2: Utiliser .with_format('torch') pour accès plus rapide
+        # ou garder le dataset HF tel quel pour gros datasets
+        return hf_dataset
 
     def _build_index(self):
         """Construit l'index pour mapper indices → (image_idx, label_idx)"""
         self.index_mapping = []
 
-        # Détecter automatiquement si multi-label
+        # Détection automatique du mode multi-label
         if not self.multi_label and len(self.dataset) > 0:
             first_labels = self.dataset[0][self.label_column]
             self.multi_label = isinstance(first_labels, (list, tuple)) and len(first_labels) > 1
 
         if self.multi_label:
-            for img_idx in range(len(self.dataset)):
-                labels = self.dataset[img_idx][self.label_column]
+            # Une seule itération sur le dataset
+            print("  → Construction de l'index multi-label...")
+            for img_idx, item in enumerate(self.dataset):
+                labels = item[self.label_column]
                 if not isinstance(labels, (list, tuple)):
                     labels = [labels]
 
+                # Ajouter un mapping pour chaque label de cette image
                 for label_idx in range(len(labels)):
                     self.index_mapping.append((img_idx, label_idx))
 
-            print(f"Mode multi-label: {len(self.dataset)} images → {len(self.index_mapping)} échantillons")
+            print(f"  ✓ {len(self.dataset)} images → {len(self.index_mapping)} échantillons")
         else:
+            # Mode single-label: mapping direct
             self.index_mapping = [(i, 0) for i in range(len(self.dataset))]
 
     def __len__(self) -> int:
@@ -142,7 +161,7 @@ class HuggingFaceImageDataset(CustomDataset):
         img_idx, label_idx = self.index_mapping[idx]
         item = self.dataset[img_idx]
 
-        # Charger l'image brute
+        # Charger l'image
         image = item[self.image_column]
         if not isinstance(image, Image.Image):
             image = Image.fromarray(np.array(image)).convert('RGB')
@@ -171,11 +190,14 @@ class HuggingFaceImageDataset(CustomDataset):
 
     @property
     def labels(self) -> Set[str]:
-        all_labels = set()
-        for item in self.dataset:
-            labels = item[self.label_column]
-            if isinstance(labels, (list, tuple)):
-                all_labels.update(labels)
-            else:
-                all_labels.add(labels)
-        return all_labels
+        """Cache les labels pour éviter de réitérer"""
+        if not hasattr(self, '_cached_labels'):
+            all_labels = set()
+            for item in self.dataset:
+                labels = item[self.label_column]
+                if isinstance(labels, (list, tuple)):
+                    all_labels.update(labels)
+                else:
+                    all_labels.add(labels)
+            self._cached_labels = all_labels
+        return self._cached_labels
