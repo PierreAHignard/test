@@ -138,7 +138,9 @@ class BaseImageDatasetLoader(ABC):
             batch_size=self.batch_size,
             num_workers=self.num_workers,
             shuffle=shuffle,
-            pin_memory=torch.cuda.is_available()
+            pin_memory=self.config.dataloader.pin_memory,
+            prefetch_factor=self.config.dataloader.prefetch_factor,
+            persistent_workers=self.config.dataloader.persistent_workers
         )
 
     @property

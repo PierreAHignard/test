@@ -88,8 +88,7 @@ class LocalImageDataset(CustomDataset):
 
 class HuggingFaceImageDataset(CustomDataset):
     """
-    Wrapper pour dataset HuggingFace avec support single et multi-label.
-    Version optimisée pour éviter les accès séquentiels lents.
+    Version optimisée pour environnements à RAM limitée (Kaggle, Colab)
     """
 
     def __init__(
@@ -111,48 +110,44 @@ class HuggingFaceImageDataset(CustomDataset):
 
         super().__init__()
 
-        # Convertir le dataset en format optimisé dès le départ
-        print("Préparation du dataset pour accès rapide...")
-        self.dataset = self._prepare_dataset(hf_dataset)
+        # Extraction UNIQUEMENT des métadonnées (légères)
+        print("Extraction des métadonnées du dataset...")
+        self.dataset = hf_dataset
+        self._extract_metadata()
         self._build_index()
 
-    def _prepare_dataset(self, hf_dataset):
-        """Convertit le dataset HF en format optimisé pour accès rapide"""
-        # Option 1: Convertir en liste (charge tout en mémoire)
-        # Plus rapide mais consomme plus de RAM
-        if len(hf_dataset) < 50000:  # Seuil arbitraire
-            print("  → Chargement en mémoire...")
-            return list(hf_dataset)
+    def _extract_metadata(self):
+        """Extrait seulement les infos nécessaires (labels, pas les images)"""
+        # Accès optimisé aux colonnes HuggingFace
+        # Charge UNIQUEMENT la colonne des labels, pas les images
+        label_data = self.dataset[self.label_column]
 
-        # Option 2: Utiliser .with_format('torch') pour accès plus rapide
-        # ou garder le dataset HF tel quel pour gros datasets
-        return hf_dataset
-
-    def _build_index(self):
-        """Construit l'index pour mapper indices → (image_idx, label_idx)"""
-        self.index_mapping = []
-
-        # Détection automatique du mode multi-label
-        if not self.multi_label and len(self.dataset) > 0:
-            first_labels = self.dataset[0][self.label_column]
+        # Détection auto du mode multi-label
+        if not self.multi_label and len(label_data) > 0:
+            first_labels = label_data[0]
             self.multi_label = isinstance(first_labels, (list, tuple)) and len(first_labels) > 1
 
-        if self.multi_label:
-            # Une seule itération sur le dataset
-            print("  → Construction de l'index multi-label...")
-            for img_idx, item in enumerate(self.dataset):
-                labels = item[self.label_column]
-                if not isinstance(labels, (list, tuple)):
-                    labels = [labels]
+        # Stocker le nombre de labels par image (très léger en mémoire)
+        self.n_labels_per_image = []
+        for labels in label_data:
+            if not isinstance(labels, (list, tuple)):
+                labels = [labels]
+            self.n_labels_per_image.append(len(labels))
 
-                # Ajouter un mapping pour chaque label de cette image
-                for label_idx in range(len(labels)):
+        print(f"  → {len(self.n_labels_per_image)} images analysées")
+
+    def _build_index(self):
+        """Construit l'index à partir des métadonnées"""
+        self.index_mapping = []
+
+        if self.multi_label:
+            for img_idx, n_labels in enumerate(self.n_labels_per_image):
+                for label_idx in range(n_labels):
                     self.index_mapping.append((img_idx, label_idx))
 
-            print(f"  ✓ {len(self.dataset)} images → {len(self.index_mapping)} échantillons")
+            print(f"  ✓ Mode multi-label: {len(self.n_labels_per_image)} images → {len(self.index_mapping)} échantillons")
         else:
-            # Mode single-label: mapping direct
-            self.index_mapping = [(i, 0) for i in range(len(self.dataset))]
+            self.index_mapping = [(i, 0) for i in range(len(self.n_labels_per_image))]
 
     def __len__(self) -> int:
         return len(self.index_mapping)
@@ -190,11 +185,11 @@ class HuggingFaceImageDataset(CustomDataset):
 
     @property
     def labels(self) -> Set[str]:
-        """Cache les labels pour éviter de réitérer"""
+        """Version optimisée qui accède seulement à la colonne labels"""
         if not hasattr(self, '_cached_labels'):
             all_labels = set()
-            for item in self.dataset:
-                labels = item[self.label_column]
+            label_data = self.dataset[self.label_column]
+            for labels in label_data:
                 if isinstance(labels, (list, tuple)):
                     all_labels.update(labels)
                 else:
