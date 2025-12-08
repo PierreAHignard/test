@@ -1,7 +1,9 @@
-from typing import Dict, List, Union
+from typing import Dict, List, Union, Any
 from itertools import count
 import pandas as pd
 from logging import Logger
+import json
+from pathlib import Path
 
 
 class ClassMapping:
@@ -11,10 +13,12 @@ class ClassMapping:
 
     def __init__(
             self,
+            config: Any,
             mapping: Dict[str, int] = None,
             logger: Logger = None,
             allow_new_class_outside_preload: bool = False
     ):
+        self.config = config
         self._mapping = mapping or {}
         self._logger = logger
         self._allow_new_class_outside_preload = allow_new_class_outside_preload
@@ -78,6 +82,69 @@ class ClassMapping:
 
         if len(problematic_keys) > 0:
             raise ValueError(f"Issue with classes {problematic_keys}")
+
+    def save(self, path: str = None):
+        """
+        Saves the class mapping to a JSON file.
+
+        :param path: Optional path to save the mapping. If not set, uses config.working_directory
+        """
+        if path is None:
+            path = self.config.working_directory / "last_classes.json"
+        else:
+            path = Path(path)
+
+        # Assurer que le répertoire existe
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Préparer les données à sauvegarder
+        data = {
+            "mapping": self._mapping,
+            "allow_new_class_outside_preload": self._allow_new_class_outside_preload,
+            "size": self.size
+        }
+
+        # Sauvegarder en JSON
+        with open(path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+
+        if self._logger:
+            self._logger.info(f"Class mapping saved to {path}")
+
+    @classmethod
+    def load(cls, config: Any, path: str = None, logger: Logger = None):
+        """
+        Loads a class mapping from a JSON file.
+
+        :param config: Configuration object
+        :param path: Optional path to load the mapping from. If not set, uses config.working_directory
+        :param logger: Optional logger
+        :return: ClassMapping instance with loaded data
+        """
+        if path is None:
+            path = config.working_directory / "last_classes.json"
+        else:
+            path = Path(path)
+
+        if not path.exists():
+            raise FileNotFoundError(f"Mapping file not found at {path}")
+
+        # Charger les données depuis JSON
+        with open(path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+
+        # Créer une nouvelle instance avec le mapping chargé
+        instance = cls(
+            config=config,
+            mapping=data["mapping"],
+            logger=logger,
+            allow_new_class_outside_preload=data.get("allow_new_class_outside_preload", False)
+        )
+
+        if logger:
+            logger.info(f"Class mapping loaded from {path} with {instance.size} classes")
+
+        return instance
 
     @property
     def name_to_idx(self):
