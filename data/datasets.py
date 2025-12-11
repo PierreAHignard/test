@@ -1,6 +1,8 @@
 from abc import abstractmethod
 from typing import Set, Optional, Callable, Any, Tuple, List, Dict
 from pathlib import Path
+
+from torch import Tensor
 from torch.utils.data import Dataset
 from PIL import Image
 import numpy as np
@@ -145,14 +147,14 @@ class HuggingFaceImageDataset(CustomDataset):
         # Construction de l'index multi-label
         self._build_index()
 
-        print(f"✅ Dataset prêt: {len(self.images)} images → {len(self)} échantillons")
+        print(f"✅ Dataset prêt: {len(self.images_tensor)} images → {len(self)} échantillons")
 
     def _preload_dataset(self, hf_dataset):
         """Charge tout le dataset en mémoire de manière optimisée"""
         dataset_size = len(hf_dataset)
 
         # Pré-allocation des listes pour performance
-        self.images: List[Image.Image] = []
+        self.images_tensor: List[Tensor] = []
         self.labels_list: List[Any] = []
         self.bboxes_list: Optional[List[Any]] = [] if self.bbox_column else None
 
@@ -167,7 +169,7 @@ class HuggingFaceImageDataset(CustomDataset):
             # Image
             image = item[self.image_column]
             image = self.pre_processor(image)
-            self.images.append(image)
+            self.images_tensor.append(image)
 
             # Labels
             labels = item[self.label_column]
@@ -207,7 +209,7 @@ class HuggingFaceImageDataset(CustomDataset):
         img_idx, label_idx = self.index_mapping[idx]
 
         # Récupération directe depuis les listes pré-chargées
-        image = self.images[img_idx]
+        image = self.images_tensor[img_idx]
         labels = self.labels_list[img_idx]
         label = labels[label_idx]
 
@@ -217,10 +219,6 @@ class HuggingFaceImageDataset(CustomDataset):
             bboxes = self.bboxes_list[img_idx]
             if isinstance(bboxes, (list, tuple)) and len(bboxes) > label_idx:
                 bbox = bboxes[label_idx]
-
-        # Copie de l'image pour éviter les modifications en place
-        # Important si vous utilisez des augmentations aléatoires
-        image = image.copy()
 
         # Application des transformations
         if self.transforms:
