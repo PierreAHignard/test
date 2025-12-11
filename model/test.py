@@ -814,24 +814,22 @@ class Tester:
         self,
         test_loader: DataLoader,
         test_threshold_range: bool = True,
-        thresholds: Optional[List[float]] = None
+        thresholds: Optional[List[float]] = None,
+        min_coverage: int = 0.5
     ):
         """
         Run complete evaluation pipeline with threshold analysis.
 
         Args:
-            test_loader: DataLoader for test data
-            test_threshold_range: Si True, teste une gamme de seuils
-            thresholds: Liste optionnelle de seuils personnalisés
+            :param test_loader: DataLoader for test data
+            :param test_threshold_range: Si True, teste une gamme de seuils
+            :param thresholds: Liste optionnelle de seuils personnalisés
+            :param min_coverage: If testing a threshold range, used to determine the best threshold
         """
         print("Starting full evaluation pipeline...\n")
 
-        # 1. Run standard evaluation
-        metrics = self.evaluate(test_loader)
-        self.print_summary(metrics)
-        self.generate_classification_report()
 
-        # 2. Test threshold range if requested
+        # Test threshold range if requested
         if test_threshold_range:
             print("\nTesting confidence threshold range...")
             results_df = self.evaluate_threshold_range(
@@ -848,8 +846,14 @@ class Tester:
             optimal_threshold, optimal_metrics = self.find_optimal_threshold(
                 results_df,
                 metric='f1',
-                min_coverage=0.5
+                min_coverage=min_coverage
             )
+            self.confidence_threshold = optimal_threshold
+
+        # Run standard evaluation with best, or if not determined, the requested/default threshold
+        metrics = self.evaluate(test_loader)
+        self.print_summary(metrics)
+        self.generate_classification_report()
 
         # 3. Generate all standard plots
         print("\nGenerating visualizations...")
