@@ -6,6 +6,7 @@ from PIL import Image
 import numpy as np
 from tqdm import tqdm
 
+from preprocessing.transforms import PreProcessor
 from utils.config import Config
 
 
@@ -121,7 +122,8 @@ class HuggingFaceImageDataset(CustomDataset):
         image_column: str = 'image',
         label_column: str = 'label',
         bbox_column: Optional[str] = None,
-        multi_label: bool = False
+        multi_label: bool = False,
+        bbox_padding: float = 0.1
     ):
         super().__init__()
 
@@ -132,6 +134,9 @@ class HuggingFaceImageDataset(CustomDataset):
         self.label_column = label_column
         self.bbox_column = bbox_column
         self.multi_label = multi_label
+
+        # Use the preprocessor BEFORE saving to RAM (lighter and faster as it is the same for all calls of the image)
+        self.pre_processor = PreProcessor(config, bbox_padding=bbox_padding)
 
         # Pré-chargement complet en mémoire
         print(f"🔄 Chargement du dataset en mémoire...")
@@ -161,8 +166,7 @@ class HuggingFaceImageDataset(CustomDataset):
         for item in tqdm(hf_dataset, desc="Chargement", total=dataset_size, unit="img"):
             # Image
             image = item[self.image_column]
-            if not isinstance(image, Image.Image):
-                image = Image.fromarray(np.array(image)).convert('RGB')
+            image = self.pre_processor(image)
             self.images.append(image)
 
             # Labels

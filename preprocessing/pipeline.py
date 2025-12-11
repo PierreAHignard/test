@@ -11,20 +11,16 @@ class TransformPipeline:
         self,
         config: Config,
         model_name: str = 'resnet50',
-        is_train: bool = True,
-        bbox_padding: float = 0.1
+        is_train: bool = True
     ):
         self.config = config
         self.is_train = is_train
 
         # Instancier dans l'ordre
-        self.pre_processor = PreProcessor(config, bbox_padding=bbox_padding)
         self.augmentor = DataAugmentation(config, is_train=is_train)
         self.model_processor = ModelSpecificPreprocessor(config, model_name)
 
     def __call__(self, image: Any, bbox: Tuple[float, float, float, float] = None) -> Tuple[str, Any]:
-        # Global Preprocessing
-        image = self.pre_processor(image, bbox=bbox)
 
         # Data Augmentation
         image = self.augmentor(image)
