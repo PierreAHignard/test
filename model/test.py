@@ -1,31 +1,4 @@
 """
-test.py - Model Evaluation and Metrics Generation
-"""
-
-import torch
-import torch.nn as nn
-from torch.utils.data import DataLoader
-import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.metrics import (
-    confusion_matrix,
-    classification_report,
-    accuracy_score,
-    precision_recall_fscore_support,
-    roc_curve,
-    auc,
-    top_k_accuracy_score
-)
-from typing import Dict, List, Tuple, Optional
-import json
-from utils.config import Config
-from tqdm import tqdm
-import pandas as pd
-from datetime import datetime
-
-
-"""
 test.py - Model Evaluation and Metrics Generation with Threshold Analysis
 """
 
@@ -421,6 +394,7 @@ class Tester:
         """Calculate all evaluation metrics."""
         metrics = {}
 
+        # Create confident predictions based on threshold
         if use_confidence_threshold:
             confident_mask = ~self.uncertain_mask
             confident_predictions = self.all_predictions[confident_mask]
@@ -443,65 +417,82 @@ class Tester:
             print(f"  Uncertain samples: {n_uncertain}/{n_total} ({100 * n_uncertain / n_total:.2f}%)")
             print(f"  Mean confidence: {self.all_confidences.mean():.4f}")
         else:
+            # Use all predictions
             confident_predictions = self.all_predictions
             confident_labels = self.all_labels
             confident_mask = np.ones(len(self.all_predictions), dtype=bool)
 
-        if len(confident_predictions) > 0:
-            metrics['overall_accuracy'] = accuracy_score(
-                confident_labels,
-                confident_predictions
-            )
+        # Only calculate metrics if we have predictions
+        if len(confident_predictions) == 0:
+            print("⚠️ No confident predictions!")
+            metrics['overall_accuracy'] = 0.0
+            return metrics
 
-            if len(confident_predictions) > 0:
+        # Overall accuracy
+        metrics['overall_accuracy'] = accuracy_score(
+            confident_labels,
+            confident_predictions
+        )
+
+        # Top-k accuracy (only if we have enough classes)
+        n_classes = len(self.class_names)
+        if n_classes >= 3:
+            try:
                 metrics['top_3_accuracy'] = top_k_accuracy_score(
                     confident_labels,
                     self.all_probabilities[confident_mask],
-                    k=min(3, len(self.class_names)),
-                    labels=self.config.class_mapping.labels
+                    k=min(3, n_classes)
                 )
+            except Exception as e:
+                print(f"⚠️ Could not calculate top-3 accuracy: {e}")
+                metrics['top_3_accuracy'] = 0.0
+
+        if n_classes >= 5:
+            try:
                 metrics['top_5_accuracy'] = top_k_accuracy_score(
                     confident_labels,
                     self.all_probabilities[confident_mask],
-                    k=min(5, len(self.class_names)),
-                    labels=self.config.class_mapping.labels
+                    k=min(5, n_classes)
                 )
+            except Exception as e:
+                print(f"⚠️ Could not calculate top-5 accuracy: {e}")
+                metrics['top_5_accuracy'] = 0.0
 
-            precision, recall, f1, support = precision_recall_fscore_support(
+        # Per-class metrics
+        precision, recall, f1, support = precision_recall_fscore_support(
+            confident_labels,
+            confident_predictions,
+            average=None,
+            zero_division=0
+        )
+
+        metrics['per_class'] = {
+            self.class_names[i]: {
+                'precision': float(precision[i]),
+                'recall': float(recall[i]),
+                'f1_score': float(f1[i]),
+                'support': int(support[i])
+            }
+            for i in range(len(self.class_names))
+        }
+
+        # Macro and weighted averages
+        for avg_type in ['macro', 'weighted']:
+            p, r, f, _ = precision_recall_fscore_support(
                 confident_labels,
                 confident_predictions,
-                average=None,
+                average=avg_type,
                 zero_division=0
             )
+            metrics[f'{avg_type}_precision'] = float(p)
+            metrics[f'{avg_type}_recall'] = float(r)
+            metrics[f'{avg_type}_f1'] = float(f)
 
-            metrics['per_class'] = {
-                self.class_names[i]: {
-                    'precision': float(precision[i]),
-                    'recall': float(recall[i]),
-                    'f1_score': float(f1[i]),
-                    'support': int(support[i])
-                }
-                for i in range(len(self.class_names))
-            }
-
-            for avg_type in ['macro', 'weighted']:
-                p, r, f, _ = precision_recall_fscore_support(
-                    confident_labels,
-                    confident_predictions,
-                    average=avg_type,
-                    zero_division=0
-                )
-                metrics[f'{avg_type}_precision'] = float(p)
-                metrics[f'{avg_type}_recall'] = float(r)
-                metrics[f'{avg_type}_f1'] = float(f)
-
-            metrics['confusion_matrix'] = confusion_matrix(
-                confident_labels,
-                confident_predictions
-            ).tolist()
-        else:
-            print("⚠️ No confident predictions!")
-            metrics['overall_accuracy'] = 0.0
+        # Confusion matrix
+        metrics['confusion_matrix'] = confusion_matrix(
+            confident_labels,
+            confident_predictions
+        ).tolist()
 
         return metrics
 
@@ -793,22 +784,33 @@ class Tester:
 
     def print_summary(self, metrics: Dict):
         """Print a formatted summary of results."""
-        print("\n" + "="*60)
+        print("\n" + "=" * 60)
         print("TEST RESULTS SUMMARY")
-        print("="*60)
-        print(f"Overall Accuracy: {metrics['overall_accuracy']:.4f}")
-        print(f"Top-3 Accuracy:   {metrics['top_3_accuracy']:.4f}")
-        print(f"Top-5 Accuracy:   {metrics['top_5_accuracy']:.4f}")
-        print(f"\nMacro Average:")
-        print(f"  Precision: {metrics['macro_precision']:.4f}")
-        print(f"  Recall:    {metrics['macro_recall']:.4f}")
-        print(f"  F1 Score:  {metrics['macro_f1']:.4f}")
-        print(f"\nWeighted Average:")
-        print(f"  Precision: {metrics['weighted_precision']:.4f}")
-        print(f"  Recall:    {metrics['weighted_recall']:.4f}")
-        print(f"  F1 Score:  {metrics['weighted_f1']:.4f}")
-        print("="*60 + "\n")
+        print("=" * 60)
+        print(f"Overall Accuracy: {metrics.get('overall_accuracy', 0.0):.4f}")
 
+        if 'top_3_accuracy' in metrics:
+            print(f"Top-3 Accuracy:   {metrics['top_3_accuracy']:.4f}")
+        if 'top_5_accuracy' in metrics:
+            print(f"Top-5 Accuracy:   {metrics['top_5_accuracy']:.4f}")
+
+        print(f"\nMacro Average:")
+        print(f"  Precision: {metrics.get('macro_precision', 0.0):.4f}")
+        print(f"  Recall:    {metrics.get('macro_recall', 0.0):.4f}")
+        print(f"  F1 Score:  {metrics.get('macro_f1', 0.0):.4f}")
+
+        print(f"\nWeighted Average:")
+        print(f"  Precision: {metrics.get('weighted_precision', 0.0):.4f}")
+        print(f"  Recall:    {metrics.get('weighted_recall', 0.0):.4f}")
+        print(f"  F1 Score:  {metrics.get('weighted_f1', 0.0):.4f}")
+
+        if 'confidence_stats' in metrics:
+            stats = metrics['confidence_stats']
+            print(f"\nConfidence Statistics:")
+            print(f"  Uncertain ratio: {stats['uncertain_ratio']:.2%}")
+            print(f"  Mean confidence: {stats['mean_confidence']:.4f}")
+
+        print("=" * 60 + "\n")
 
     def run_full_evaluation(
         self,
