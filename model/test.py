@@ -457,12 +457,14 @@ class Tester:
                 metrics['top_3_accuracy'] = top_k_accuracy_score(
                     confident_labels,
                     self.all_probabilities[confident_mask],
-                    k=min(3, len(self.class_names))
+                    k=min(3, len(self.class_names)),
+                    labels=self.config.class_mapping.labels
                 )
                 metrics['top_5_accuracy'] = top_k_accuracy_score(
                     confident_labels,
                     self.all_probabilities[confident_mask],
-                    k=min(5, len(self.class_names))
+                    k=min(5, len(self.class_names)),
+                    labels=self.config.class_mapping.labels
                 )
 
             precision, recall, f1, support = precision_recall_fscore_support(

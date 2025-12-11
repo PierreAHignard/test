@@ -145,3 +145,7 @@ class ClassMapping:
         temp = {value: key for key, value in self._mapping.items()}
 
         return [temp[i] for i in range(self.size)]
+
+    @property
+    def labels(self):
+        return self._mapping.keys()
