@@ -618,7 +618,8 @@ class Tester:
             acc = top_k_accuracy_score(
                 self.all_labels,
                 self.all_probabilities,
-                k=k
+                k=k,
+                labels=self.config.class_mapping.mapped_labels
             )
             accuracies.append(acc)
 
