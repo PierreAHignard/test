@@ -36,13 +36,91 @@ def unfreeze_last_layers(model, num_layers_to_unfreeze=5):
     print(f"✓ Trainable params: {trainable:,} / {total:,} ({100*trainable/total:.1f}%)")
 
 class FocalLoss(nn.Module):
-    def __init__(self, alpha=1, gamma=2):
-        super().__init__()
-        self.alpha = alpha
+    """
+    Focal Loss pour gérer les classes déséquilibrées.
+
+    Args:
+        alpha: Facteur de pondération pour chaque classe.
+               - Si float/int : même poids pour toutes les classes
+               - Si list/tensor : poids spécifique par classe (taille = num_classes)
+        gamma: Facteur de focalisation (recommandé: 2.0)
+        reduction: 'mean', 'sum' ou 'none'
+    """
+    def __init__(self, alpha=0.25, gamma=2.0, reduction='mean'):
+        super(FocalLoss, self).__init__()
         self.gamma = gamma
+        self.reduction = reduction
+
+        # Gérer alpha comme scalaire ou tensor
+        if isinstance(alpha, (float, int)):
+            self.alpha = alpha
+            self.alpha_tensor = None
+        else:
+            # alpha est une liste ou un tensor de poids par classe
+            self.alpha = None
+            if isinstance(alpha, list):
+                self.alpha_tensor = torch.tensor(alpha, dtype=torch.float32)
+            else:
+                self.alpha_tensor = alpha.float()
 
     def forward(self, inputs, targets):
+        """
+        Args:
+            inputs: Logits du modèle (batch_size, num_classes)
+            targets: Labels (batch_size)
+        """
+        # Calcul de la cross-entropy
         ce_loss = F.cross_entropy(inputs, targets, reduction='none')
+
+        # Calcul de pt (probabilité de la classe correcte)
         pt = torch.exp(-ce_loss)
-        focal_loss = self.alpha * (1-pt)**self.gamma * ce_loss
-        return focal_loss.mean()
+
+        # Calcul du terme focal
+        focal_term = (1 - pt) ** self.gamma
+
+        # Application de alpha
+        if self.alpha_tensor is not None:
+            # Alpha par classe : sélectionner le alpha correspondant à chaque target
+            if self.alpha_tensor.device != targets.device:
+                self.alpha_tensor = self.alpha_tensor.to(targets.device)
+            alpha_t = self.alpha_tensor[targets]
+            focal_loss = alpha_t * focal_term * ce_loss
+        else:
+            # Alpha scalaire
+            focal_loss = self.alpha * focal_term * ce_loss
+
+        # Réduction
+        if self.reduction == 'mean':
+            return focal_loss.mean()
+        elif self.reduction == 'sum':
+            return focal_loss.sum()
+        else:
+            return focal_loss
+
+
+class ClassBalancedLoss(nn.Module):
+    """
+    Loss avec pondération automatique basée sur les fréquences de classes.
+    Utilise la formule: weight = (1 - beta) / (1 - beta^n)
+    où n est le nombre d'échantillons par classe.
+    """
+    def __init__(self, samples_per_class, beta=0.9999, loss_type='focal', gamma=2.0):
+        super(ClassBalancedLoss, self).__init__()
+        self.beta = beta
+        self.loss_type = loss_type
+        self.gamma = gamma
+
+        # Calcul des poids
+        effective_num = 1.0 - torch.pow(beta, samples_per_class)
+        weights = (1.0 - beta) / effective_num
+        weights = weights / weights.sum() * len(weights)
+
+        self.register_buffer('weights', weights)
+
+    def forward(self, inputs, targets):
+        if self.loss_type == 'focal':
+            loss_fn = FocalLoss(alpha=self.weights, gamma=self.gamma, reduction='mean')
+        else:
+            loss_fn = nn.CrossEntropyLoss(weight=self.weights)
+
+        return loss_fn(inputs, targets)
