@@ -10,11 +10,11 @@ from tqdm import tqdm
 from preprocessing.transforms import PreProcessor
 from utils.config import Config
 
-
 __all__ = [
     "LocalImageDataset",
     "HuggingFaceImageDataset"
 ]
+
 
 class CustomDataset(Dataset):
     def __init__(self):
@@ -29,6 +29,7 @@ class CustomDataset(Dataset):
     def get_label_distribution(self):
         pass
 
+
 class LocalImageDataset(CustomDataset):
     """
     Dataset pour images locales avec structure dossier = label.
@@ -36,12 +37,14 @@ class LocalImageDataset(CustomDataset):
     """
 
     def __init__(
-        self,
-        data_dir: Path,
-        config: Config,
-        transforms: Optional[Callable] = None,
-        extensions: Tuple[str, ...] = ('.jpg', '.jpeg', '.png', '.bmp', '.tiff'),
-        preload: bool = True  # Nouveau paramètre
+            self,
+            data_dir: Path,
+            config: Config,
+            transforms: Optional[Callable] = None,
+            extensions: Tuple[str, ...] = ('.jpg', '.jpeg', '.png', '.bmp', '.tiff'),
+            preload: bool = True,
+            # NOUVEAU PARAMÈTRE
+            discard_unmapped_classes: bool = False
     ):
         super().__init__()
 
@@ -50,6 +53,9 @@ class LocalImageDataset(CustomDataset):
         self.extensions = extensions
         self.config = config
         self.preload = preload
+        # NOUVEAU
+        self.discard_unmapped_classes = discard_unmapped_classes
+        self._discarded_classes_count = 0  # Compteur pour le résumé
 
         # Chargement des paths
         self.samples = []
@@ -60,15 +66,36 @@ class LocalImageDataset(CustomDataset):
             print("🔄 Pré-chargement des images en mémoire...")
             self._preload_images()
 
+        # Affichage du résumé
+        if self.discard_unmapped_classes and self._discarded_classes_count > 0:
+            print(
+                f"⚠️ {self._discarded_classes_count} échantillons ignorés car leur classe n'était pas dans class_mapping.")
+
     def _load_samples(self):
         """Charge tous les chemins d'images et leurs labels"""
         class_dirs = sorted([d for d in self.data_dir.iterdir() if d.is_dir()])
+
+        # Récupération des labels mappés pour vérification rapide
+        mapped_labels = set(self.config.class_mapping.labels)
 
         if not class_dirs:
             raise ValueError(f"Aucun sous-dossier trouvé dans {self.data_dir}")
 
         for class_dir in tqdm(class_dirs, desc="Scan des dossiers"):
             label = class_dir.name
+
+            # NOUVEAU: Vérifier si la classe doit être ignorée
+            if self.discard_unmapped_classes and label not in mapped_labels:
+
+                # Compter les images ignorées dans ce dossier
+                count_in_dir = 0
+                for ext in self.extensions:
+                    count_in_dir += len(list(class_dir.glob(f'*{ext}')))
+
+                self._discarded_classes_count += count_in_dir
+
+                print(f"⚠️ Classe '{label}' ignorée ({count_in_dir} images). Non présente dans class_mapping.")
+                continue  # Passer à la classe suivante
 
             for ext in self.extensions:
                 for img_path in class_dir.glob(f'*{ext}'):
@@ -77,7 +104,8 @@ class LocalImageDataset(CustomDataset):
         if not self.samples:
             raise FileNotFoundError(
                 f"Aucune image trouvée dans {self.data_dir} "
-                f"avec les extensions {self.extensions}"
+                f"avec les extensions {self.extensions}. "
+                "Vérifiez les dossiers et le class_mapping."
             )
 
         print(f"✅ {len(self.samples)} images trouvées")
@@ -105,6 +133,7 @@ class LocalImageDataset(CustomDataset):
         if self.transforms:
             image = self.transforms(image)
 
+        # Utilisation de la méthode __getitem__ du ClassMapping pour la récupération sécurisée
         label_idx = self.config.class_mapping[label]
         return image, label_idx
 
@@ -123,15 +152,17 @@ class HuggingFaceImageDataset(CustomDataset):
     """
 
     def __init__(
-        self,
-        hf_dataset,
-        config: Config,
-        transforms: Optional[Callable] = None,
-        image_column: str = 'image',
-        label_column: str = 'label',
-        bbox_column: str = 'boxes',
-        multi_label: bool = False,
-        bbox_padding: float = 0.1
+            self,
+            hf_dataset,
+            config: Config,
+            transforms: Optional[Callable] = None,
+            image_column: str = 'image',
+            label_column: str = 'label',
+            bbox_column: str = 'boxes',
+            multi_label: bool = False,
+            bbox_padding: float = 0.1,
+            # NOUVEAU PARAMÈTRE
+            discard_unmapped_classes: bool = False
     ):
         super().__init__()
 
@@ -141,13 +172,20 @@ class HuggingFaceImageDataset(CustomDataset):
         self.label_column = label_column
         self.bbox_column = bbox_column
         self.multi_label = multi_label
+        self.discard_unmapped_classes = discard_unmapped_classes
 
         self.pre_processor = PreProcessor(config, bbox_padding=bbox_padding)
 
         # Pré-chargement complet en mémoire
         print(f"🔄 Chargement du dataset en mémoire...")
+        self.discarded_count = 0  # Compteur d'échantillons ignorés
         self._preload_dataset(hf_dataset)
+
+        # Affichage du résumé
         print(f"✅ Dataset prêt: {len(hf_dataset)} images → {len(self)} échantillons")
+        if self.discarded_count > 0:
+            print(
+                f"⚠️ {self.discarded_count} échantillons (label/image) ignorés car leur classe n'était pas dans class_mapping.")
 
     def _preload_dataset(self, hf_dataset):
         """Charge tout le dataset en mémoire de manière optimisée"""
@@ -156,9 +194,11 @@ class HuggingFaceImageDataset(CustomDataset):
         # Pré-allocation des listes pour performance
         self.images_tensor: List[Tensor] = []
         self.label_list: List[Any] = []
-        #self.bbox_list: List[Any] = []
 
-        # Détection du mode multi-label sur le premier échantillon
+        # Récupération des labels mappés pour vérification rapide
+        mapped_labels = set(self.config.class_mapping.labels)
+
+        # Détection du mode multi-label sur le premier échantillon (logique conservée)
         if dataset_size > 0:
             first_item = hf_dataset[0]
             first_labels = first_item[self.label_column]
@@ -183,18 +223,28 @@ class HuggingFaceImageDataset(CustomDataset):
 
             image = item[self.image_column]
 
-            # Finally, saving to the lists
+            # Traitement des labels/bboxes
             for i in range(len(labels)):
+                current_label = labels[i]
+                current_bbox = bboxes[i]
+
+                # Vérification de l'existence du label dans le mapping
+                if self.discard_unmapped_classes and current_label not in mapped_labels:
+                    self.discarded_count += 1
+                    continue  # Ignorer cet échantillon (paire image/label)
+
                 # Image
-                cropped_image = self.pre_processor(image, bbox=bboxes[i])
+                cropped_image = self.pre_processor(image, bbox=current_bbox)
                 self.images_tensor.append(cropped_image)
 
-                # Label
-                mapped_label = self.config.class_mapping.set(labels[i])
+                # Label (doit exister dans le mapping car on a vérifié, on peut utiliser __getitem__)
+                # IMPORTANT: Si vous voulez ajouter de nouveaux labels *après* le preload,
+                # il faut utiliser .set(), sinon utilisez __getitem__ (qui est le comportement par défaut si non trouvé).
+                # Ici, on utilise .set() pour s'assurer que si la classe a été conservée, elle est bien mappée.
+                # Si discard_unmapped_classes est True, .set() ne sera appelé que pour les classes déjà mappées.
+                # Si discard_unmapped_classes est False, .set() mappera les nouvelles classes.
+                mapped_label = self.config.class_mapping.set(current_label)
                 self.label_list.append(mapped_label)
-
-                # BBox
-                #self.bbox_list.append(bboxes[i])
 
     def __getitem__(self, idx: int) -> Tuple[Any, int]:
         """Accès rapide depuis la mémoire"""
@@ -214,13 +264,12 @@ class HuggingFaceImageDataset(CustomDataset):
 
     @property
     def labels(self) -> Set[str]:
-        """Retourne l'ensemble unique de tous les labels"""
-
+        """Retourne l'ensemble unique de tous les labels mappés (indices)"""
+        # Note: ceci retourne l'ensemble des INDICES, pas les noms de classes originales si elles n'étaient pas mappées initialement.
         return set(self.label_list)
 
     def get_label_distribution(self) -> Dict[str, int]:
-        """Retourne la distribution des labels"""
+        """Retourne la distribution des labels mappés"""
         from collections import Counter
 
         return dict(Counter(self.label_list))
-
