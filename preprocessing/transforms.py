@@ -1,8 +1,16 @@
+# preprocessing/transforms.py
 import torch
 import torchvision.transforms as T
 from typing import Any, Tuple, Optional
 from utils.config import Config
 from PIL import Image
+
+__all__ = [
+    "PreProcessor",
+    "DataAugmentation",
+    "ModelSpecificPreprocessor",
+    "CropByBoundingBox"
+]
 
 # ============ CROP PAR BOUNDING BOX ============
 
@@ -120,9 +128,6 @@ class PreProcessor:
         # Redimensionner
         image = image.resize(self.config.image_size)
 
-        # Convertir en tensor float32
-        image = T.ToTensor()(image)
-
         return image
 
 
@@ -131,28 +136,16 @@ class PreProcessor:
 class DataAugmentation:
     """Étape 2: Augmentation des données (seulement train)"""
 
-    def __init__(self, config: Config, is_train: bool = True):
+    def __init__(self, config: Config, transforms = None):
         self.config = config
-        self.is_train = is_train
+        self.transforms = T.Compose(transforms or []) # If no transforms, then just empty
 
-        if is_train:
-            transforms = self.config.transforms
-        else:
-            transforms = [] # Pas d'augmentation en eval
+    def __call__(self, image: Any) -> Any:
+        # Appliquer augmentations
+        image = self.transforms(image)
 
-        self.transforms = T.Compose(transforms)
-
-    def __call__(self, image: Any) -> Tuple[str, Any]:
-        if self.is_train:
-            # Convertir tensor -> PIL pour torchvision.transforms
-            if isinstance(image, torch.Tensor):
-                image = T.ToPILImage()(image)
-
-            # Appliquer augmentations
-            image = self.transforms(image)
-
-            # Reconvertir en tensor
-            image = T.ToTensor()(image)
+        # Reconvertir en tensor
+        image = T.ToTensor()(image)
 
         return image
 
@@ -162,9 +155,9 @@ class DataAugmentation:
 class ModelSpecificPreprocessor:
     """Étape 3: Normalisation spécifique au modèle"""
 
-    def __init__(self, config: Config, model_name: str = 'resnet50'):
+    def __init__(self, config: Config):
         self.config = config
-        self.model_name = model_name
+        self.model_name = config.model.backbone
 
         # Normalisation ImageNet standard pour plupart des modèles
         self.normalize = T.Normalize(

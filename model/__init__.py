@@ -1,4 +1,6 @@
 __all__ = [
     "callbacks",
-    "train"
+    "train",
+    "test",
+    "utils"
 ]

@@ -1,4 +1,6 @@
 __all__ = [
     "datasets",
-    "loaders"
+    "loaders",
+    "class_mapper",
+    "utils"
 ]

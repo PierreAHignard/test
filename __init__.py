@@ -4,3 +4,10 @@ Source files for the complete pipeline implementation for the FEM 'Commande Entr
 
 __version__ = "2.0.0"
 __author__ = "Group 28"
+
+__all__ = [
+    "data",
+    "model",
+    "preprocessing",
+    "utils"
+]

@@ -1,9 +1,16 @@
+# model/train.py
 """
 Model training script with progressive fine-tuning and multi-stage training.
 """
+import json
+
+import mlflow
 import torch
 import torch.nn as nn
+from matplotlib import pyplot as plt
 from tqdm import tqdm
+
+from evaluation_multimodele.train import config
 from model.callbacks import EarlyStopping
 from typing import Optional, List, Dict, Any
 
@@ -47,7 +54,8 @@ class Trainer:
             config,
             device,
             criterion = nn.CrossEntropyLoss(),
-            training_stages: Optional[List[TrainingStage]] = None
+            training_stages: Optional[List[TrainingStage]] = None,
+            mlflow_logging: bool = False
     ):
         self.model = model
         self.default_train_loader = train_loader
@@ -55,6 +63,7 @@ class Trainer:
         self.config = config
         self.device = device
         self.default_criterion = criterion
+        self.mlflow_logging = mlflow_logging
 
         # Configuration des étapes d'entraînement
         self.training_stages = training_stages
@@ -75,8 +84,8 @@ class Trainer:
         self.train_loader = None
 
         self.early_stopping = EarlyStopping(
-            patience=config.optimizer.patience,
-            delta=config.optimizer.delta,
+            patience=config.train.patience,
+            delta=config.train.delta,
             verbose=True
         )
 
@@ -91,6 +100,10 @@ class Trainer:
         }
         self.current_epoch = 0
         self.stage_epoch = 0  # Epoch dans le stage actuel
+
+        with open(config.config.working_directory / "config.json", "w") as f:
+            json.dump(training_stages, f, indent=2)
+        mlflow.log_artifact("config.json")
 
     def _freeze_backbone(self):
         """Gèle toutes les couches du backbone pré-entraîné"""
@@ -331,7 +344,7 @@ class Trainer:
 
         return avg_loss, accuracy
 
-    def fit(self):
+    def fit(self, print_plots=True):
         """Boucle d'entraînement complète avec support multi-stage"""
 
         # Mode multi-stage
@@ -374,13 +387,29 @@ class Trainer:
                             'loss': val_loss,
                             'accuracy': val_acc
                         }
-                        torch.save(checkpoint, self.config.working_directory / f'checkpoint_stage_{stage_idx}.tar')
+                        torch.save(checkpoint, self.config.working_directory / f'checkpoint.tar')
                         print("  ✓ Checkpoint sauvegardé")
+
+                    if self.mlflow_logging and mlflow.active_run():
+                        mlflow.log_metrics({
+                            "train.train_loss": train_loss,
+                            "train.train_acc": train_acc,
+                            "train.val_loss": val_loss,
+                            "train.val_acc": val_acc,
+                        }, step=self.stage_epoch)
 
                     # Early stopping
                     if self.early_stopping(val_loss):
                         print(f"\n✓ Étape '{stage.name}' arrêtée à l'époque {epoch + 1}")
                         break
+
+                if self.mlflow_logging and mlflow.active_run():
+                    mlflow.log_metrics({
+                        f"train.stage_{self.current_stage}.final_train_loss": self.history['train_loss'][-1],
+                        f"train.stage_{self.current_stage}.final_train_acc": self.history['train_acc'][-1],
+                        f"train.stage_{self.current_stage}.final_val_loss": self.history['val_loss'][-1],
+                        f"train.stage_{self.current_stage}.final_val_acc": self.history['val_acc'][-1]
+                    }, step=self.current_epoch)
 
                 print(f"\n✓ Étape '{stage.name}' terminée")
 
@@ -434,8 +463,54 @@ class Trainer:
                     torch.save(checkpoint, self.config.working_directory / 'checkpoint.tar')
                     print("  ✓ Checkpoint sauvegardé")
 
+                if self.mlflow_logging and mlflow.active_run():
+                    mlflow.log_metrics({
+                        "train.train_loss": train_loss,
+                        "train.train_acc": train_acc,
+                        "train.val_loss": val_loss,
+                        "train.val_acc": val_acc,
+                    }, step=self.current_epoch)
+
                 if self.early_stopping(val_loss):
                     print(f"\n✓ Entraînement arrêté à l'époque {epoch + 1}")
                     break
+
+        if self.mlflow_logging and mlflow.active_run():
+            mlflow.log_metrics({
+                f"train.final_train_loss": self.history['train_loss'][-1],
+                f"train.final_train_acc": self.history['train_acc'][-1],
+                f"train.final_val_loss": self.history['val_loss'][-1],
+                f"train.final_val_acc": self.history['val_acc'][-1]
+            }, step=self.current_epoch)
+
+        # Create Training Graphs
+            # Tracer les graphiques
+            plt.figure(figsize=(12, 5))
+
+            # Graphique de train_loss et val_loss
+            plt.subplot(1, 2, 1)
+            plt.plot(self.history["train_loss"], label="Train Loss")
+            plt.plot(self.history["val_loss"], label="Validation Loss")
+            plt.xlabel("Époques")
+            plt.ylabel("Perte")
+            plt.title("Train and Validation Loss")
+            plt.legend()
+
+            # Graphique de val_acc
+            plt.subplot(1, 2, 2)
+            plt.plot(self.history["train_acc"], label="Train Accuracy")
+            plt.plot(self.history["val_acc"], label="Validation Accuracy")
+            plt.xlabel("Époques")
+            plt.ylabel("Précision")
+            plt.title("Train and Validation Accuracy")
+            plt.legend()
+
+            plt.tight_layout()
+            plt.savefig(self.config.working_directory / "train_loss_acc.png")
+
+        if self.mlflow_logging:
+            mlflow.log_artifact(self.config.working_directory / "train_loss_acc.png")
+        if print_plots:
+            plt.show()
 
         return self.history

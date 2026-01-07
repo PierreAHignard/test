@@ -1,3 +1,4 @@
+# model/utils.py
 __all__= [
     "unfreeze_last_layers",
     "FocalLoss"
@@ -96,31 +97,3 @@ class FocalLoss(nn.Module):
             return focal_loss.sum()
         else:
             return focal_loss
-
-
-class ClassBalancedLoss(nn.Module):
-    """
-    Loss avec pondération automatique basée sur les fréquences de classes.
-    Utilise la formule: weight = (1 - beta) / (1 - beta^n)
-    où n est le nombre d'échantillons par classe.
-    """
-    def __init__(self, samples_per_class, beta=0.9999, loss_type='focal', gamma=2.0):
-        super(ClassBalancedLoss, self).__init__()
-        self.beta = beta
-        self.loss_type = loss_type
-        self.gamma = gamma
-
-        # Calcul des poids
-        effective_num = 1.0 - torch.pow(beta, samples_per_class)
-        weights = (1.0 - beta) / effective_num
-        weights = weights / weights.sum() * len(weights)
-
-        self.register_buffer('weights', weights)
-
-    def forward(self, inputs, targets):
-        if self.loss_type == 'focal':
-            loss_fn = FocalLoss(alpha=self.weights, gamma=self.gamma, reduction='mean')
-        else:
-            loss_fn = nn.CrossEntropyLoss(weight=self.weights)
-
-        return loss_fn(inputs, targets)

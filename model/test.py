@@ -1,7 +1,5 @@
-"""
-test.py - Model Evaluation and Metrics Generation with Threshold Analysis
-"""
-
+# model/test.py
+import mlflow
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
@@ -24,6 +22,9 @@ from tqdm import tqdm
 import pandas as pd
 from datetime import datetime
 
+__all__ = [
+    "Tester"
+]
 
 class Tester:
     """Comprehensive model testing and evaluation class."""
@@ -32,7 +33,9 @@ class Tester:
         self,
         model: nn.Module,
         config: Config,
-        confidence_threshold: float = 0.5
+        confidence_threshold: float = 0.5,
+        print_plots = True,
+        mlflow_logging = False
     ):
         """
         Initialize the tester.
@@ -45,10 +48,11 @@ class Tester:
         self.config = config
         self.model = model.to(self.config.device)
         self.confidence_threshold = confidence_threshold
+        self.print_plots = print_plots
+        self.mlflow_logging = mlflow_logging
 
         self.timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        self.run_dir = self.config.working_directory / "test" / self.timestamp
-        self.run_dir.mkdir(parents=True, exist_ok=True)
+        self.config.working_directory = self.config.working_directory
 
         self.all_predictions = []
         self.all_labels = []
@@ -57,13 +61,13 @@ class Tester:
         self.uncertain_mask = []
         self.class_names = []
 
-        # Nouveau: stocker les résultats pour différents seuils
+        # Stocker les résultats pour différents seuils
         self.threshold_results = {}
 
     def evaluate(
         self,
         test_loader: DataLoader,
-        save_results: bool = True,
+        save_predictions: bool = True,
         use_confidence_threshold: bool = True
     ) -> Dict:
         """
@@ -71,7 +75,7 @@ class Tester:
 
         Args:
             test_loader: DataLoader for test data
-            save_results: Whether to save results to disk
+            save_predictions: Whether to save results to disk
             use_confidence_threshold: Si True, applique le seuil de confiance
 
         Returns:
@@ -120,7 +124,7 @@ class Tester:
 
         metrics = self._calculate_metrics(use_confidence_threshold)
 
-        if save_results:
+        if save_predictions:
             self._save_results(metrics, use_confidence_threshold)
 
         return metrics
@@ -129,7 +133,7 @@ class Tester:
             self,
             test_loader: DataLoader,
             thresholds: Optional[List[float]] = None,
-            save_results: bool = True
+            save_predictions: bool = True
     ) -> pd.DataFrame:
         """
         Évalue le modèle sur une gamme de seuils de confiance.
@@ -144,7 +148,7 @@ class Tester:
         # First, get all predictions without threshold
         original_threshold = self.confidence_threshold
         self.confidence_threshold = 0.0
-        _ = self.evaluate(test_loader, save_results=False, use_confidence_threshold=False)
+        _ = self.evaluate(test_loader, save_predictions=False, use_confidence_threshold=False)
 
         n_classes = len(self.class_names)
         results = []
@@ -207,11 +211,11 @@ class Tester:
         # Restore original threshold
         self.confidence_threshold = original_threshold
 
-        if save_results:
-            results_df.to_csv(self.run_dir / 'threshold_analysis.csv', index=False)
-            with open(self.run_dir / 'threshold_results.json', 'w') as f:
+        if save_predictions:
+            results_df.to_csv(self.config.working_directory / 'threshold_analysis.csv', index=False)
+            with open(self.config.working_directory / 'threshold_results.json', 'w') as f:
                 json.dump(self.threshold_results, f, indent=2)
-            print(f"\n✓ Threshold analysis saved to: {self.run_dir}")
+            print(f"\n✓ Threshold analysis saved to: {self.config.working_directory}")
 
         return results_df
 
@@ -282,8 +286,11 @@ class Tester:
         ax.set_ylim([0, 1.05])
 
         plt.tight_layout()
-        plt.savefig(self.run_dir / 'threshold_analysis.png', dpi=300, bbox_inches='tight')
-        plt.show()
+        plt.savefig(self.config.working_directory / 'threshold_analysis.png', dpi=300, bbox_inches='tight')
+        if self.mlflow_logging:
+            mlflow.log_artifact(self.config.working_directory / 'threshold_analysis.png', "test_metrics/")
+        if self.print_plots:
+            plt.show()
         print("Saved: threshold_analysis.png")
 
     def plot_accuracy_coverage_tradeoff(
@@ -338,9 +345,12 @@ class Tester:
         plt.ylim([0, 1.05])
 
         plt.tight_layout()
-        plt.savefig(self.run_dir / 'accuracy_coverage_tradeoff.png',
+        plt.savefig(self.config.working_directory / 'accuracy_coverage_tradeoff.png',
                     dpi=300, bbox_inches='tight')
-        plt.show()
+        if self.mlflow_logging:
+            mlflow.log_artifact(self.config.working_directory / 'accuracy_coverage_tradeoff.png', "test_metrics/")
+        if self.print_plots:
+            plt.show()
         print("Saved: accuracy_coverage_tradeoff.png")
 
     def find_optimal_threshold(
@@ -409,9 +419,10 @@ class Tester:
                 'median_confidence': float(np.median(self.all_confidences))
             }
 
-            print(f"\n📊 Confidence Statistics:")
-            print(f"  Uncertain samples: {n_uncertain}/{n_total} ({100 * n_uncertain / n_total:.2f}%)")
-            print(f"  Mean confidence: {self.all_confidences.mean():.4f}")
+            if self.print_plots:
+                print(f"\n📊 Confidence Statistics:")
+                print(f"  Uncertain samples: {n_uncertain}/{n_total} ({100 * n_uncertain / n_total:.2f}%)")
+                print(f"  Mean confidence: {self.all_confidences.mean():.4f}")
         else:
             # Use all predictions
             confident_predictions = self.all_predictions
@@ -536,8 +547,11 @@ class Tester:
         plt.tight_layout()
 
         filename = f'confusion_matrix{"_normalized" if normalize else ""}.png'
-        plt.savefig(self.run_dir / filename, dpi=300, bbox_inches='tight')
-        plt.show()
+        plt.savefig(self.config.working_directory / filename, dpi=300, bbox_inches='tight')
+        if self.mlflow_logging:
+            mlflow.log_artifact(self.config.working_directory / filename, "test_metrics/")
+        if self.print_plots:
+            plt.show()
         print(f"Saved: {filename}")
 
     def plot_per_class_metrics(self, figsize: Tuple[int, int] = (14, 6)):
@@ -567,8 +581,11 @@ class Tester:
         ax.set_ylim([0, 1.05])
 
         plt.tight_layout()
-        plt.savefig(self.run_dir / 'per_class_metrics.png', dpi=300, bbox_inches='tight')
-        plt.show()
+        plt.savefig(self.config.working_directory / 'per_class_metrics.png', dpi=300, bbox_inches='tight')
+        if self.mlflow_logging:
+            mlflow.log_artifact(self.config.working_directory / 'per_class_metrics.png', "test_metrics/")
+        if self.print_plots:
+            plt.show()
         print("Saved: per_class_metrics.png")
 
     def plot_roc_curves(self, figsize: Tuple[int, int] = (10, 8)):
@@ -605,8 +622,11 @@ class Tester:
         ax.grid(True, alpha=0.3)
 
         plt.tight_layout()
-        plt.savefig(self.run_dir / 'roc_curves.png', dpi=300, bbox_inches='tight')
-        plt.show()
+        plt.savefig(self.config.working_directory / 'roc_curves.png', dpi=300, bbox_inches='tight')
+        if self.mlflow_logging:
+            mlflow.log_artifact(self.config.working_directory / 'roc_curves.png', "test_metrics/")
+        if self.print_plots:
+            plt.show()
         print("Saved: roc_curves.png")
 
     def plot_top_k_accuracy(self, max_k: int = 10):
@@ -636,8 +656,11 @@ class Tester:
             plt.text(k, acc + 0.02, f'{acc:.3f}', ha='center', fontsize=8)
 
         plt.tight_layout()
-        plt.savefig(self.run_dir / 'top_k_accuracy.png', dpi=300, bbox_inches='tight')
-        plt.show()
+        plt.savefig(self.config.working_directory / 'top_k_accuracy.png', dpi=300, bbox_inches='tight')
+        if self.mlflow_logging:
+            mlflow.log_artifact(self.config.working_directory / 'top_k_accuracy.png', "test_metrics/")
+        if self.print_plots:
+            plt.show()
         print("Saved: top_k_accuracy.png")
 
     def plot_misclassification_analysis(self, top_n: int = 10):
@@ -686,11 +709,14 @@ class Tester:
 
             plt.tight_layout()
             plt.savefig(
-                self.run_dir / 'misclassification_analysis.png',
+                self.config.working_directory / 'misclassification_analysis.png',
                 dpi=300,
                 bbox_inches='tight'
             )
-            plt.show()
+            if self.mlflow_logging:
+                mlflow.log_artifact(self.config.working_directory / 'misclassification_analysis.png', "test_metrics/")
+            if self.print_plots:
+                plt.show()
             print("Saved: misclassification_analysis.png")
 
     def plot_confidence_distribution(self):
@@ -732,8 +758,11 @@ class Tester:
         plt.grid(True, alpha=0.3, axis='y')
 
         plt.tight_layout()
-        plt.savefig(self.run_dir / 'confidence_distribution.png', dpi=300, bbox_inches='tight')
-        plt.show()
+        plt.savefig(self.config.working_directory / 'confidence_distribution.png', dpi=300, bbox_inches='tight')
+        if self.mlflow_logging:
+            mlflow.log_artifact(self.config.working_directory / 'confidence_distribution.png', "test_metrics/")
+        if self.print_plots:
+            plt.show()
         print("Saved: confidence_distribution.png")
 
     def generate_classification_report(self):
@@ -748,17 +777,20 @@ class Tester:
         )
 
         # Save text report
-        with open(self.run_dir / 'classification_report.txt', 'w') as f:
+        with open(self.config.working_directory / 'classification_report.txt', 'w') as f:
             f.write(report)
 
-        print("\nClassification Report:")
-        print(report)
+        if self.mlflow_logging:
+            mlflow.log_artifact(self.config.working_directory / 'classification_report.txt', "test_metrics/")
+        if self.print_plots:
+            print("\nClassification Report:")
+            print(report)
         print(f"\nSaved: classification_report.txt")
 
     def _save_results(self, metrics: Dict, use_confidence_threshold: bool):
         """Save all results to disk."""
         # Save metrics as JSON
-        with open(self.run_dir / 'metrics.json', 'w') as f:
+        with open(self.config.working_directory / 'metrics.json', 'w') as f:
             json.dump(metrics, f, indent=2)
 
         # Save predictions
@@ -784,9 +816,9 @@ class Tester:
         for i, class_name in enumerate(self.class_names):
             results_df[f'prob_{class_name}'] = self.all_probabilities[:, i]
 
-        results_df.to_csv(self.run_dir / 'predictions.csv', index=False)
+        results_df.to_csv(self.config.working_directory / 'predictions.csv', index=False)
 
-        print(f"\n✓ Results saved to: {self.run_dir}")
+        print(f"\n✓ Results saved to: {self.config.working_directory}")
 
     def print_summary(self, metrics: Dict):
         """Print a formatted summary of results."""
@@ -818,6 +850,30 @@ class Tester:
 
         print("=" * 60 + "\n")
 
+        # Métriques principales
+        mlflow.log_metric("test.acc", metrics.get('overall_accuracy', 0.0))
+
+        if 'top_3_accuracy' in metrics:
+            mlflow.log_metric("test.top_3_acc", metrics['top_3_accuracy'])
+        if 'top_5_accuracy' in metrics:
+            mlflow.log_metric("test.top_5_acc", metrics['top_5_accuracy'])
+
+        # Macro Average
+        mlflow.log_metric("test.macro_precision", metrics.get('macro_precision', 0.0))
+        mlflow.log_metric("test.macro_recall", metrics.get('macro_recall', 0.0))
+        mlflow.log_metric("test.macro_f1", metrics.get('macro_f1', 0.0))
+
+        # Weighted Average
+        mlflow.log_metric("test.weighted_precision", metrics.get('weighted_precision', 0.0))
+        mlflow.log_metric("test.weighted_recall", metrics.get('weighted_recall', 0.0))
+        mlflow.log_metric("test.weighted_f1", metrics.get('weighted_f1', 0.0))
+
+        # Confidence Statistics
+        if 'confidence_stats' in metrics:
+            stats = metrics['confidence_stats']
+            mlflow.log_metric("test.uncertain_ratio", stats['uncertain_ratio'])
+            mlflow.log_metric("test.mean_confidence", stats['mean_confidence'])
+
     def run_full_evaluation(
         self,
         test_loader: DataLoader,
@@ -843,7 +899,7 @@ class Tester:
             results_df = self.evaluate_threshold_range(
                 test_loader,
                 thresholds=thresholds,
-                save_results=True
+                save_predictions=True
             )
 
             # Plot threshold analysis

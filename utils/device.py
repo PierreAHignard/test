@@ -1,7 +1,4 @@
-"""
-Device selection (GPU, CPU...)
-"""
-
+# utils/device.py
 import torch
 from torch.amp import GradScaler
 import psutil

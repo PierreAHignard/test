@@ -1,13 +1,10 @@
-"""
-Module de chargement de datasets d'images.
-Supports: Hugging Face, Local Files (structure dossier = label)
-Permet de créer des splits train/val/test
-"""
+# data/loaders.py
 
 from abc import ABC, abstractmethod
 from typing import Optional, Callable, Tuple, Union
 from pathlib import Path
 import torch
+from torch.fx.experimental.unification.unification_tools import getter
 from torch.utils.data import Dataset, DataLoader, random_split
 from datasets import load_dataset
 import numpy as np
@@ -28,7 +25,6 @@ class BaseImageDatasetLoader(ABC):
         self,
         config: Config,
         batch_size: int = 32,
-        num_workers: int = 0,
         shuffle: bool = True,
         transforms: Optional[Callable] = None,
         split_ratios: Optional[Tuple[float, ...]] = None,
@@ -40,7 +36,6 @@ class BaseImageDatasetLoader(ABC):
         Args:
             config: Config
             batch_size: Taille des batches
-            num_workers: Nombre de workers pour le DataLoader
             shuffle: Mélanger les données
             transforms: Transformations à appliquer aux images
             split_ratios: Ratios pour split (ex: (0.7, 0.15, 0.15) pour train/val/test)
@@ -48,7 +43,6 @@ class BaseImageDatasetLoader(ABC):
             seed: Graine aléatoire pour la reproductibilité des splits
         """
         self.batch_size = batch_size
-        self.num_workers = num_workers
         self.shuffle = shuffle
         self.transforms = transforms
         self.split_ratios = split_ratios
@@ -122,7 +116,7 @@ class BaseImageDatasetLoader(ABC):
                 loaders.append(DataLoader(
                     ds,
                     batch_size=self.batch_size,
-                    num_workers=self.num_workers,
+                    num_workers=self.config.dataloader.num_workers,
                     shuffle=shuffle,
                     pin_memory=self.config.dataloader.pin_memory,
                     prefetch_factor=self.config.dataloader.prefetch_factor,
@@ -140,7 +134,7 @@ class BaseImageDatasetLoader(ABC):
         return DataLoader(
             splits,
             batch_size=self.batch_size,
-            num_workers=self.num_workers,
+            num_workers=self.config.dataloader.num_workers,
             shuffle=shuffle,
             pin_memory=self.config.dataloader.pin_memory,
             prefetch_factor=self.config.dataloader.prefetch_factor,
@@ -149,12 +143,14 @@ class BaseImageDatasetLoader(ABC):
 
     @property
     def labels(self):
-
         return self.load_data().labels
 
     def get_label_distribution(self):
-
         return self.load_data().get_label_distribution()
+
+    @getter
+    def get_dataset(self):
+        return self._dataset
 
 
 class LocalImageDatasetLoader(BaseImageDatasetLoader):

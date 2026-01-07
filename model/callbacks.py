@@ -1,7 +1,4 @@
-"""
-Callbacks for model training.
-"""
-
+# model/callbacks.py
 __all__ = [
     "EarlyStopping"
 ]

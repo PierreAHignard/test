@@ -1,3 +1,4 @@
+# utils/analyze_dataset.py
 """
 Module de test et analyse des datasets d'images.
 Fourni des métriques complètes pour déboguer les problèmes de données.

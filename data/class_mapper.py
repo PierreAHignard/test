@@ -1,10 +1,13 @@
-from typing import Dict, List, Union, Any
+# data/class_mapper.py
+from typing import Dict, Union, Any
 from itertools import count
 import pandas as pd
-from logging import Logger
 import json
 from pathlib import Path
 
+__all__ = [
+    "ClassMapping"
+]
 
 class ClassMapping:
     """
@@ -83,7 +86,7 @@ class ClassMapping:
         if len(problematic_keys) > 0:
             raise ValueError(f"Issue with classes {problematic_keys}")
 
-    def save(self, path: str = None):
+    def save(self, path: str | Path = None):
         """
         Saves the class mapping to a JSON file.
 
@@ -109,7 +112,7 @@ class ClassMapping:
             json.dump(data, f, indent=2, ensure_ascii=False)
 
     @classmethod
-    def load(cls, config: Any, path: str = None):
+    def load(cls, config: Any, path: str | Path = None):
         """
         Loads a class mapping from a JSON file.
 
