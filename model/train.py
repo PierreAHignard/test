@@ -10,7 +10,6 @@ import torch.nn as nn
 from matplotlib import pyplot as plt
 from tqdm import tqdm
 
-from evaluation_multimodele.train import config
 from model.callbacks import EarlyStopping
 from typing import Optional, List, Dict, Any
 
